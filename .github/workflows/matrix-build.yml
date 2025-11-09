@@ -2,9 +2,9 @@ name: Multi-Platform Matrix Build with Artifacts
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -13,44 +13,56 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [16, 18, 20]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        version: [14, 16, 18]
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
       - name: matrix-ba92f8
-        run: echo "Building for OS ${{ matrix.os }} with Node ${{ matrix.node-version }}"
+        run: echo "Building for OS ${{ matrix.os }} with version ${{ matrix.version }}"
       
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js ${{ matrix.version }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.version }}
       
       - name: Display system information
         run: |
           echo "OS: ${{ matrix.os }}"
-          echo "Node version: ${{ matrix.node-version }}"
+          echo "Version: ${{ matrix.version }}"
+          echo "Runner: ${{ runner.os }}"
           node --version
           npm --version
       
+      - name: Create build directory
+        run: mkdir -p build
+        shell: bash
+      
       - name: Generate build artifact
         run: |
-          mkdir -p build
-          echo "{\"os\": \"${{ matrix.os }}\", \"node\": \"${{ matrix.node-version }}\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"build_number\": \"${{ github.run_number }}\"}" > build/output.json
-          echo "Build completed for ${{ matrix.os }} with Node ${{ matrix.node-version }}" > build/output.txt
+          echo '{"os": "${{ matrix.os }}", "version": "${{ matrix.version }}", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'", "build_number": "${{ github.run_number }}"}' > build/output.json
+          echo "Build completed for ${{ matrix.os }} with version ${{ matrix.version }}" > build/output.txt
+          echo "GitHub Run ID: ${{ github.run_id }}" >> build/output.txt
+          echo "GitHub Run Number: ${{ github.run_number }}" >> build/output.txt
+        shell: bash
+      
+      - name: Verify artifact contents
+        run: |
+          echo "Verifying build artifacts..."
+          cat build/output.json
+          cat build/output.txt
+          ls -la build/
         shell: bash
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-ba92f8-${{ matrix.os }}-node${{ matrix.node-version }}
+          name: build-ba92f8-${{ matrix.os }}-v${{ matrix.version }}
           path: build/
           retention-days: 30
+          if-no-files-found: error
   
   validate:
     needs: build
@@ -64,51 +76,81 @@ jobs:
       
       - name: List downloaded artifacts
         run: |
-          echo "Downloaded artifacts:"
+          echo "=== Downloaded artifacts ==="
           ls -R artifacts/
+          echo ""
+          echo "=== Artifact count ==="
+          find artifacts/ -name "output.json" | wc -l
       
       - name: Validate artifacts
         run: |
           echo "Validating artifacts contain required files..."
           artifact_count=0
+          
           for dir in artifacts/build-ba92f8-*; do
             if [ -d "$dir" ]; then
               artifact_count=$((artifact_count + 1))
               echo "Checking $dir"
+              
+              # Check output.json exists
               if [ ! -f "$dir/output.json" ]; then
-                echo "Error: output.json not found in $dir"
+                echo "❌ Error: output.json not found in $dir"
                 exit 1
               fi
+              
+              # Check output.txt exists
               if [ ! -f "$dir/output.txt" ]; then
-                echo "Error: output.txt not found in $dir"
+                echo "❌ Error: output.txt not found in $dir"
                 exit 1
               fi
+              
               # Validate JSON file is not empty
               if [ ! -s "$dir/output.json" ]; then
-                echo "Error: output.json is empty in $dir"
+                echo "❌ Error: output.json is empty in $dir"
                 exit 1
               fi
-              echo "✓ $dir validated successfully"
+              
+              # Validate TXT file is not empty
+              if [ ! -s "$dir/output.txt" ]; then
+                echo "❌ Error: output.txt is empty in $dir"
+                exit 1
+              fi
+              
+              echo "✅ $dir validated successfully"
+              echo "  - output.json: $(wc -c < "$dir/output.json") bytes"
+              echo "  - output.txt: $(wc -c < "$dir/output.txt") bytes"
             fi
           done
+          
+          echo ""
+          echo "==================================="
           echo "Total artifacts validated: $artifact_count"
+          echo "==================================="
+          
           if [ $artifact_count -lt 3 ]; then
-            echo "Error: Expected at least 3 artifacts, found $artifact_count"
+            echo "❌ Error: Expected at least 3 artifacts, found $artifact_count"
             exit 1
           fi
-          echo "✓ All validation checks passed!"
+          
+          echo "✅ All validation checks passed!"
+          echo "✅ Found $artifact_count artifacts with correct naming and content"
       
       - name: Generate summary report
         run: |
-          echo "# Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# 🎉 Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Matrix Build Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Node Version | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact Name | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|--------|" >> $GITHUB_STEP_SUMMARY
+          
           for dir in artifacts/build-ba92f8-*; do
             if [ -d "$dir" ]; then
               artifact_name=$(basename "$dir")
-              echo "| $artifact_name | - | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+              echo "| \`$artifact_name\` | ✅ Success |" >> $GITHUB_STEP_SUMMARY
             fi
           done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Artifacts:** $(find artifacts/ -name "output.json" | wc -l)" >> $GITHUB_STEP_SUMMARY
