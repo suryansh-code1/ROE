@@ -16,11 +16,14 @@ jobs:
         node-version: [16, 18, 20]
     
     steps:
-      - name: matrix-ba92f8
-        run: echo "Building for OS ${{ matrix.os }} with Node ${{ matrix.node-version }}"
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: matrix-ba92f8
+        run: echo "Building for OS ${{ matrix.os }} with Node ${{ matrix.node-version }}"
       
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
