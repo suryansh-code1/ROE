@@ -1,30 +1,35 @@
-name: Matrix Build with Artifacts (3 reliable variants)
+name: Multi-Platform Matrix Build (ba929f8)
 
 on:
   push:
-  workflow_dispatch:
+    branches: [ main, master ] # Triggers the workflow on push to main/master
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
   build:
-    # matrix with 3 variants — all run on ubuntu-latest so they reliably execute
+    # 1. Matrix Strategy: Run on 3 different OS versions
     strategy:
       matrix:
-        variant: ['variant-1', 'variant-2', 'variant-3']
-    runs-on: ubuntu-latest
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    # 2. Parallel Execution: Use the matrix OS for each job
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
+      - name: Check out repository code
         uses: actions/checkout@v4
 
-      - name: Build step
-        id: matrix-ba929f8                # ← EXACT id required by grader
-        run: |
-          echo "Build output for ${{ matrix.variant }}" > output.txt
-          echo "variant=${{ matrix.variant }}" >> output.txt
-          cat output.txt
+      # 3. Build Artifacts (Generate): Create a unique, non-empty file
+      - name: Generate build artifact
+        # 4. Step Identifier: Add the required ID
+        id: matrix-ba929f8
+        run: echo "Build output for ${{ matrix.os }}" > output.txt
 
+      # 3. Build Artifacts (Upload): Upload the generated file
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-ba929f8-${{ matrix.variant }}  # required prefix
+          # Name the artifact with the required prefix and variant
+          name: build-ba929f8-${{ matrix.os }}
+          # Path to the file to upload
           path: output.txt
