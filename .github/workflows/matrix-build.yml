@@ -8,23 +8,22 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]  # ✅ 3 variants required
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build / generate artifact
-        id: matrix-ba929f8        # ← EXACT id the grader looks for
+      - name: Build step
+        id: matrix-ba929f8
         run: |
           echo "Build output for ${{ matrix.os }}" > output.txt
           echo "variant=${{ matrix.os }}" >> output.txt
-          # show file so the run log contains something
           cat output.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-ba929f8-${{ matrix.os }}   # required prefix
+          name: build-ba929f8-${{ matrix.os }}
           path: output.txt
